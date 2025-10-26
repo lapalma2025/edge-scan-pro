@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, RotateCw, Image as ImageIcon, Type } from 'lucide-react';
+import { Save, RotateCw, Image as ImageIcon, Type, FileSignature, RotateCcw, RotateCw as Rotate90, Sun, Contrast } from 'lucide-react';
+import { SignaturePad } from '@/components/SignaturePad';
 import { applyFilter, Point, applyPerspectiveTransform } from '@/lib/opencv-utils';
 import { createPDF, compressImage } from '@/lib/pdf-utils';
 import { performOCR, initOCR } from '@/lib/ocr-utils';
@@ -28,6 +29,13 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
   const [ocrText, setOcrText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isOCRing, setIsOCRing] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(0);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [signaturePosition, setSignaturePosition] = useState({ x: 50, y: 80 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,7 +62,13 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
         }
 
         // Apply filter
-        const filtered = await applyFilter(transformed, filter);
+        let filtered = await applyFilter(transformed, filter);
+
+        // Apply rotation, brightness, contrast
+        if (rotation !== 0 || brightness !== 0 || contrast !== 0) {
+          filtered = await applyAdjustments(filtered, rotation, brightness, contrast);
+        }
+
         setProcessedImage(filtered);
       };
       img.src = imageDataUrl;
@@ -70,11 +84,122 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
     }
   };
 
+  const applyAdjustments = async (
+    dataUrl: string,
+    rot: number,
+    bright: number,
+    contr: number
+  ): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d')!;
+
+        // Handle rotation
+        if (rot === 90 || rot === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate((rot * Math.PI) / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Apply brightness and contrast
+        if (bright !== 0 || contr !== 0) {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          const factor = (259 * (contr + 255)) / (255 * (259 - contr));
+
+          for (let i = 0; i < data.length; i += 4) {
+            // Brightness
+            data[i] += bright;
+            data[i + 1] += bright;
+            data[i + 2] += bright;
+
+            // Contrast
+            data[i] = factor * (data[i] - 128) + 128;
+            data[i + 1] = factor * (data[i + 1] - 128) + 128;
+            data[i + 2] = factor * (data[i + 2] - 128) + 128;
+          }
+
+          ctx.putImageData(imageData, 0, 0);
+        }
+
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.src = dataUrl;
+    });
+  };
+
   useEffect(() => {
     if (processedImage) {
       processImage();
     }
-  }, [filter]);
+  }, [filter, rotation, brightness, contrast]);
+
+  useEffect(() => {
+    if (processedImage && canvasRef.current) {
+      renderImageWithSignature();
+    }
+  }, [processedImage, signatureDataUrl, signaturePosition]);
+
+  const renderImageWithSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !processedImage) return;
+
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+
+      if (signatureDataUrl) {
+        const sigImg = new Image();
+        sigImg.onload = () => {
+          const sigWidth = img.width * 0.3;
+          const sigHeight = (sigImg.height / sigImg.width) * sigWidth;
+          const x = (signaturePosition.x / 100) * img.width - sigWidth / 2;
+          const y = (signaturePosition.y / 100) * img.height - sigHeight / 2;
+          ctx.drawImage(sigImg, x, y, sigWidth, sigHeight);
+        };
+        sigImg.src = signatureDataUrl;
+      }
+    };
+    img.src = processedImage;
+  };
+
+  const handleSignatureConfirm = (sigDataUrl: string) => {
+    setSignatureDataUrl(sigDataUrl);
+    setShowSignaturePad(false);
+    toast({
+      title: 'Signature Added',
+      description: 'You can adjust the position using the sliders'
+    });
+  };
+
+  const getFinalImage = (): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!signatureDataUrl) {
+        resolve(processedImage);
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        resolve(processedImage);
+        return;
+      }
+
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    });
+  };
 
   const handleOCR = async () => {
     if (!processedImage) return;
@@ -114,8 +239,11 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
     try {
       await vibrate(ImpactStyle.Heavy);
 
+      // Get final image with signature
+      const finalImage = await getFinalImage();
+
       // Compress image
-      const compressed = await compressImage(processedImage, 0.85, 2000, 2800);
+      const compressed = await compressImage(finalImage, 0.85, 2000, 2800);
 
       // Create PDF
       const pdfBytes = await createPDF([
@@ -166,9 +294,17 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
   };
 
   return (
-    <div className="fixed inset-0 bg-background z-50 flex flex-col">
-      <div className="flex-1 overflow-y-auto p-4 pb-32">
-        <div className="max-w-2xl mx-auto space-y-4">
+    <>
+      {showSignaturePad && (
+        <SignaturePad
+          onConfirm={handleSignatureConfirm}
+          onCancel={() => setShowSignaturePad(false)}
+        />
+      )}
+
+      <div className="fixed inset-0 bg-background z-50 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-4 pb-32">
+          <div className="max-w-2xl mx-auto space-y-4">
           <div>
             <Label htmlFor="name">Document Name</Label>
             <Input
@@ -193,37 +329,135 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
             </TabsList>
 
             <TabsContent value="preview" className="space-y-4">
-              <Card className="p-4">
-                <Label className="mb-2 block">Filter</Label>
-                <div className="grid grid-cols-3 gap-2">
+              <Card className="p-4 space-y-4">
+                <div>
+                  <Label className="mb-2 block">Filter</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant={filter === 'color' ? 'default' : 'outline'}
+                      onClick={() => setFilter('color')}
+                      className="w-full"
+                    >
+                      Color
+                    </Button>
+                    <Button
+                      variant={filter === 'grayscale' ? 'default' : 'outline'}
+                      onClick={() => setFilter('grayscale')}
+                      className="w-full"
+                    >
+                      Grayscale
+                    </Button>
+                    <Button
+                      variant={filter === 'bw' ? 'default' : 'outline'}
+                      onClick={() => setFilter('bw')}
+                      className="w-full"
+                    >
+                      B&W
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <Button
-                    variant={filter === 'color' ? 'default' : 'outline'}
-                    onClick={() => setFilter('color')}
+                    variant="outline"
+                    onClick={() => setRotation((rotation - 90 + 360) % 360)}
                     className="w-full"
                   >
-                    Color
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Rotate Left
                   </Button>
                   <Button
-                    variant={filter === 'grayscale' ? 'default' : 'outline'}
-                    onClick={() => setFilter('grayscale')}
+                    variant="outline"
+                    onClick={() => setRotation((rotation + 90) % 360)}
                     className="w-full"
                   >
-                    Grayscale
-                  </Button>
-                  <Button
-                    variant={filter === 'bw' ? 'default' : 'outline'}
-                    onClick={() => setFilter('bw')}
-                    className="w-full"
-                  >
-                    B&W
+                    <Rotate90 className="h-4 w-4 mr-2" />
+                    Rotate Right
                   </Button>
                 </div>
+
+                <div>
+                  <Label className="mb-2 flex items-center">
+                    <Sun className="h-4 w-4 mr-2" />
+                    Brightness: {brightness}
+                  </Label>
+                  <Input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    value={brightness}
+                    onChange={(e) => setBrightness(Number(e.target.value))}
+                  />
+                </div>
+
+                <div>
+                  <Label className="mb-2 flex items-center">
+                    <Contrast className="h-4 w-4 mr-2" />
+                    Contrast: {contrast}
+                  </Label>
+                  <Input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    value={contrast}
+                    onChange={(e) => setContrast(Number(e.target.value))}
+                  />
+                </div>
+
+                <Button
+                  variant="outline"
+                  onClick={() => setShowSignaturePad(true)}
+                  className="w-full"
+                >
+                  <FileSignature className="h-4 w-4 mr-2" />
+                  Add Signature
+                </Button>
+
+                {signatureDataUrl && (
+                  <div className="space-y-2">
+                    <Label>Signature Position</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Horizontal: {signaturePosition.x}%</Label>
+                        <Input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={signaturePosition.x}
+                          onChange={(e) => setSignaturePosition({ ...signaturePosition, x: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Vertical: {signaturePosition.y}%</Label>
+                        <Input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={signaturePosition.y}
+                          onChange={(e) => setSignaturePosition({ ...signaturePosition, y: Number(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSignatureDataUrl(null)}
+                      className="w-full"
+                    >
+                      Remove Signature
+                    </Button>
+                  </div>
+                )}
               </Card>
 
               {processedImage ? (
-                <div className="rounded-lg overflow-hidden border border-border">
+                <div className="rounded-lg overflow-hidden border border-border relative">
+                  <canvas
+                    ref={canvasRef}
+                    className="w-full h-auto hidden"
+                  />
                   <img
-                    src={processedImage}
+                    src={signatureDataUrl ? canvasRef.current?.toDataURL() || processedImage : processedImage}
                     alt="Processed"
                     className="w-full h-auto"
                   />
@@ -285,6 +519,30 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
           </Button>
         </div>
       </div>
+
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border">
+        <div className="flex gap-2 max-w-2xl mx-auto">
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1"
+            onClick={onCancel}
+            disabled={isProcessing}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="lg"
+            className="flex-1"
+            onClick={handleSave}
+            disabled={isProcessing || !documentName.trim()}
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {isProcessing ? 'Saving...' : 'Save PDF'}
+          </Button>
+        </div>
+      </div>
     </div>
+    </>
   );
 };

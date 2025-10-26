@@ -3,8 +3,9 @@ import { db, Document } from '@/lib/db';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FileText, Search, Star, Trash2, Share2 } from 'lucide-react';
+import { FileText, Search, Star, Trash2, Share2, Lock } from 'lucide-react';
 import { shareFile, vibrate } from '@/lib/capacitor-utils';
+import { authenticateWithBiometrics } from '@/lib/biometric-utils';
 import { useToast } from '@/hooks/use-toast';
 import { ImpactStyle } from '@capacitor/haptics';
 
@@ -12,11 +13,22 @@ export const Documents = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    loadDocuments();
+    authenticateUser();
   }, []);
+
+  const authenticateUser = async () => {
+    setIsLoading(true);
+    const result = await authenticateWithBiometrics('Authenticate to access your documents');
+    setIsAuthenticated(result);
+    if (result) {
+      loadDocuments();
+    }
+    setIsLoading(false);
+  };
 
   const loadDocuments = async () => {
     try {
@@ -98,6 +110,34 @@ export const Documents = () => {
       day: 'numeric'
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <Lock className="h-12 w-12 mx-auto mb-4 text-primary animate-pulse" />
+          <p className="text-muted-foreground">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <Card className="p-8 max-w-md text-center">
+          <Lock className="h-16 w-16 mx-auto mb-4 text-destructive" />
+          <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
+          <p className="text-muted-foreground mb-6">
+            Please authenticate to access your documents
+          </p>
+          <Button onClick={authenticateUser} className="w-full">
+            Try Again
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col pb-20">
