@@ -1,12 +1,60 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { BottomNav } from '@/components/BottomNav';
+import { Scan } from './Scan';
+import { Documents } from './Documents';
+import { Settings } from './Settings';
+import { Review } from './Review';
+import { Point } from '@/lib/opencv-utils';
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState<'scan' | 'documents' | 'settings'>('scan');
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedCorners, setCapturedCorners] = useState<Point[]>([]);
+
+  const handleImageCaptured = (imageDataUrl: string, corners: Point[]) => {
+    setCapturedImage(imageDataUrl);
+    setCapturedCorners(corners);
+  };
+
+  const handleReviewComplete = () => {
+    setCapturedImage(null);
+    setCapturedCorners([]);
+    setActiveTab('documents');
+  };
+
+  const handleReviewCancel = () => {
+    setCapturedImage(null);
+    setCapturedCorners([]);
+  };
+
+  if (capturedImage) {
+    return (
+      <Review
+        imageDataUrl={capturedImage}
+        corners={capturedCorners}
+        onComplete={handleReviewComplete}
+        onCancel={handleReviewCancel}
+      />
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="bg-card border-b border-border p-4">
+        <div className="max-w-lg mx-auto">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Pro PDF Scanner
+          </h1>
+        </div>
+      </header>
+
+      <main className="flex-1 flex flex-col">
+        {activeTab === 'scan' && <Scan onImageCaptured={handleImageCaptured} />}
+        {activeTab === 'documents' && <Documents />}
+        {activeTab === 'settings' && <Settings />}
+      </main>
+
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 };
