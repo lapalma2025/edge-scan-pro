@@ -52,42 +52,49 @@ export const Scan = ({ onImageCaptured }: ScanProps) => {
       const imageDataUrl = await captureImage();
       setCapturedImage(imageDataUrl);
 
-      // Detect edges
-      if (opencvReady) {
-        const img = new Image();
-        img.onload = () => {
+      // Always try edge detection and show corner editor
+      const img = new Image();
+      img.onload = () => {
+        let corners: Point[];
+        
+        if (opencvReady) {
           const detected = detectDocumentEdges(img, 0.5);
           if (detected && detected.corners.length === 4) {
-            setDetectedCorners(detected.corners);
-            setShowCornerEditor(true);
+            corners = detected.corners;
           } else {
             // No edges detected, use full image
-            const corners: Point[] = [
+            corners = [
               { x: 0, y: 0 },
               { x: img.width, y: 0 },
               { x: img.width, y: img.height },
               { x: 0, y: img.height }
             ];
-            setDetectedCorners(corners);
-            setShowCornerEditor(true);
           }
-        };
-        img.src = imageDataUrl;
-      } else {
-        // Open manual corner editor with full-frame corners when OpenCV isn't ready
-        const img = new Image();
-        img.onload = () => {
-          const corners: Point[] = [
+        } else {
+          // OpenCV not ready, use full image
+          corners = [
             { x: 0, y: 0 },
             { x: img.width, y: 0 },
             { x: img.width, y: img.height },
             { x: 0, y: img.height }
           ];
-          setDetectedCorners(corners);
-          setShowCornerEditor(true);
-        };
-        img.src = imageDataUrl;
-      }
+        }
+        
+        setDetectedCorners(corners);
+        setShowCornerEditor(true);
+      };
+      
+      img.onerror = () => {
+        console.error('Failed to load captured image');
+        toast({
+          title: 'Error',
+          description: 'Failed to process image',
+          variant: 'destructive'
+        });
+        setIsLoading(false);
+      };
+      
+      img.src = imageDataUrl;
     } catch (error) {
       console.error('Capture error:', error);
       toast({

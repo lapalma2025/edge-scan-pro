@@ -29,8 +29,8 @@ export const authenticateWithBiometrics = async (
   reason: string = 'Authenticate to access your documents'
 ): Promise<boolean> => {
   if (!Capacitor.isNativePlatform()) {
-    console.warn('Biometrics not available in browser');
-    return true; // Allow access in browser for testing
+    // Allow access in browser for testing
+    return true;
   }
 
   try {

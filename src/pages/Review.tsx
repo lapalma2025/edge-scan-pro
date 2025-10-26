@@ -288,7 +288,7 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
       const compressed = await compressImage(finalImage, 0.85, 2000, 2800);
 
       // Create PDF (base64 to avoid large array conversions)
-      const base64 = await createPDFBase64([
+      const pdfBase64 = await createPDFBase64([
         {
           imageDataUrl: compressed,
           width: 595,
@@ -301,7 +301,7 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
 
       // Save to filesystem
       const fileName = `${documentName}.pdf`;
-      const filePath = await saveFile(base64, fileName, Directory.Documents);
+      const filePath = await saveFile(pdfBase64, fileName, Directory.Documents);
 
       // Save to database
       await db.documents.add({
@@ -309,7 +309,7 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
         createdAt: new Date(),
         updatedAt: new Date(),
         pages: 1,
-        size: Math.ceil((base64.length * 3) / 4),
+        size: Math.ceil((pdfBase64.length * 3) / 4),
         tags: [],
         favorite: false,
         ocrText: ocrText || undefined,
@@ -317,9 +317,12 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
       });
 
       toast({
-        title: 'Saved',
-        description: 'Document saved successfully'
+        title: 'PDF Saved',
+        description: `${documentName}.pdf saved successfully`
       });
+
+      // Share the PDF
+      await shareFile(filePath, documentName);
 
       onComplete();
     } catch (error) {

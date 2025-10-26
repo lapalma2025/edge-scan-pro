@@ -74,76 +74,94 @@ export const detectDocumentEdges = (
 ): DetectedDocument | null => {
   if (!cv) return null;
 
-  let src = cv.imread(imageElement);
-  let gray = new cv.Mat();
-  let blurred = new cv.Mat();
-  let edges = new cv.Mat();
-  let contours = new cv.MatVector();
-  let hierarchy = new cv.Mat();
-
   try {
-    // Downscale for performance
-    const dsize = new cv.Size(src.cols * downscale, src.rows * downscale);
-    cv.resize(src, src, dsize, 0, 0, cv.INTER_AREA);
+    // Create canvas if input is an image to avoid OpenCV imread issues
+    let canvas: HTMLCanvasElement;
+    if (imageElement instanceof HTMLImageElement) {
+      canvas = document.createElement('canvas');
+      canvas.width = imageElement.width;
+      canvas.height = imageElement.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(imageElement, 0, 0);
+    } else {
+      canvas = imageElement;
+    }
 
-    // Convert to grayscale
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    let src = cv.imread(canvas);
+    let gray = new cv.Mat();
+    let blurred = new cv.Mat();
+    let edges = new cv.Mat();
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
 
-    // Blur to reduce noise
-    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+    try {
+      // Downscale for performance
+      const dsize = new cv.Size(src.cols * downscale, src.rows * downscale);
+      cv.resize(src, src, dsize, 0, 0, cv.INTER_AREA);
 
-    // Canny edge detection
-    cv.Canny(blurred, edges, 50, 150);
+      // Convert to grayscale
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-    // Find contours
-    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      // Blur to reduce noise
+      cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
 
-    // Find largest contour with 4 corners
-    let maxArea = 0;
-    let bestContour: any = null;
+      // Canny edge detection
+      cv.Canny(blurred, edges, 50, 150);
 
-    for (let i = 0; i < contours.size(); i++) {
-      const contour = contours.get(i);
-      const area = cv.contourArea(contour);
-      
-      if (area > maxArea) {
-        const peri = cv.arcLength(contour, true);
-        const approx = new cv.Mat();
-        cv.approxPolyDP(contour, approx, 0.02 * peri, true);
+      // Find contours
+      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-        if (approx.rows === 4) {
-          maxArea = area;
-          bestContour = approx;
+      // Find largest contour with 4 corners
+      let maxArea = 0;
+      let bestContour: any = null;
+
+      for (let i = 0; i < contours.size(); i++) {
+        const contour = contours.get(i);
+        const area = cv.contourArea(contour);
+        
+        if (area > maxArea) {
+          const peri = cv.arcLength(contour, true);
+          const approx = new cv.Mat();
+          cv.approxPolyDP(contour, approx, 0.02 * peri, true);
+
+          if (approx.rows === 4) {
+            maxArea = area;
+            bestContour = approx;
+          }
         }
       }
-    }
 
-    if (bestContour && maxArea > (src.cols * src.rows * 0.1)) {
-      const corners: Point[] = [];
-      for (let i = 0; i < 4; i++) {
-        corners.push({
-          x: bestContour.data32S[i * 2] / downscale,
-          y: bestContour.data32S[i * 2 + 1] / downscale
-        });
+      if (bestContour && maxArea > (src.cols * src.rows * 0.1)) {
+        const corners: Point[] = [];
+        for (let i = 0; i < 4; i++) {
+          corners.push({
+            x: bestContour.data32S[i * 2] / downscale,
+            y: bestContour.data32S[i * 2 + 1] / downscale
+          });
+        }
+
+        // Sort corners: top-left, top-right, bottom-right, bottom-left
+        const sortedCorners = sortCorners(corners);
+        
+        return {
+          corners: sortedCorners,
+          confidence: Math.min(maxArea / (src.cols * src.rows), 1.0)
+        };
       }
 
-      // Sort corners: top-left, top-right, bottom-right, bottom-left
-      const sortedCorners = sortCorners(corners);
-      
-      return {
-        corners: sortedCorners,
-        confidence: Math.min(maxArea / (src.cols * src.rows), 1.0)
-      };
+      return null;
+    } finally {
+      src.delete();
+      gray.delete();
+      blurred.delete();
+      edges.delete();
+      contours.delete();
+      hierarchy.delete();
     }
-
+  } catch (error) {
+    console.error('Edge detection error:', error);
     return null;
-  } finally {
-    src.delete();
-    gray.delete();
-    blurred.delete();
-    edges.delete();
-    contours.delete();
-    hierarchy.delete();
   }
 };
 
