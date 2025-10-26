@@ -1,19 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Shield, Moon, Globe, Trash2, FileDown, Info } from 'lucide-react';
+import { Shield, Moon, Globe, Trash2, FileDown, Info, Fingerprint } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/db';
 import { vibrate } from '@/lib/capacitor-utils';
+import { checkBiometricAvailability } from '@/lib/biometric-utils';
 import { ImpactStyle } from '@capacitor/haptics';
 
 export const Settings = () => {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const [biometricLock, setBiometricLock] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState<string>('');
   const [privateMode, setPrivateMode] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    checkBiometrics();
+    // Set dark mode by default
+    document.documentElement.classList.add('dark');
+  }, []);
+
+  const checkBiometrics = async () => {
+    const result = await checkBiometricAvailability();
+    setBiometricAvailable(result.isAvailable);
+    if (result.biometryType) {
+      setBiometricType(result.biometryType);
+    }
+  };
 
   const handleDeleteAllData = async () => {
     if (!confirm('Are you sure you want to delete all data? This cannot be undone.')) {
@@ -79,9 +96,14 @@ export const Settings = () => {
             <div className="flex items-center gap-3">
               <Shield className="h-5 w-5 text-muted-foreground" />
               <div>
-                <Label htmlFor="biometric">Biometric Lock</Label>
+                <Label htmlFor="biometric" className="flex items-center gap-2">
+                  <Fingerprint className="h-4 w-4" />
+                  Biometric Lock
+                </Label>
                 <p className="text-sm text-muted-foreground">
-                  Require FaceID/TouchID
+                  {biometricAvailable 
+                    ? `Use ${biometricType || 'biometric'} authentication`
+                    : 'Not available on this device'}
                 </p>
               </div>
             </div>
@@ -89,6 +111,7 @@ export const Settings = () => {
               id="biometric"
               checked={biometricLock}
               onCheckedChange={setBiometricLock}
+              disabled={!biometricAvailable}
             />
           </div>
 
