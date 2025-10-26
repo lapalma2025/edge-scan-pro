@@ -4,13 +4,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, RotateCw, Image as ImageIcon, Type, FileSignature, RotateCcw, RotateCw as Rotate90, Sun, Contrast } from 'lucide-react';
+import { Save, RotateCw, Image as ImageIcon, Type, FileSignature, RotateCcw, RotateCw as Rotate90, Sun, Contrast, X, Download } from 'lucide-react';
 import { SignaturePad } from '@/components/SignaturePad';
 import { applyFilter, Point, applyPerspectiveTransform, loadOpenCV } from '@/lib/opencv-utils';
 import { createPDF, createPDFBase64, compressImage } from '@/lib/pdf-utils';
 import { performOCR, initOCR } from '@/lib/ocr-utils';
 import { db } from '@/lib/db';
-import { saveFile, vibrate } from '@/lib/capacitor-utils';
+import { saveFile, vibrate, shareFile } from '@/lib/capacitor-utils';
 import { Directory } from '@capacitor/filesystem';
 import { ImpactStyle } from '@capacitor/haptics';
 import { useToast } from '@/hooks/use-toast';
@@ -229,6 +229,44 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
     }
   };
 
+  const handleSaveJPG = async () => {
+    if (!processedImage) return;
+
+    try {
+      setIsProcessing(true);
+      await vibrate(ImpactStyle.Medium);
+
+      // Get final image with signature
+      const finalImage = await getFinalImage();
+
+      // Compress for JPG
+      const compressed = await compressImage(finalImage, 0.9, 2000, 2800);
+
+      // Convert to base64 without data URL prefix
+      const base64 = compressed.split(',')[1];
+
+      // Save to filesystem
+      const fileName = `${documentName || 'scan'}_${Date.now()}.jpg`;
+      const filePath = await saveFile(base64, fileName, Directory.Documents);
+
+      toast({
+        title: 'Saved',
+        description: 'Image saved as JPG'
+      });
+
+      await shareFile(filePath, documentName || 'Scan');
+    } catch (error) {
+      console.error('Save JPG error:', error);
+      toast({
+        title: 'Export Failed',
+        description: 'Could not save JPG',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!processedImage || !documentName.trim()) {
       toast({
@@ -306,6 +344,15 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
       )}
 
       <div className="fixed inset-0 bg-background z-50 flex flex-col">
+        <div className="glass border-b border-border/50 p-4">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Review & Edit</h2>
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-4 pb-32">
           <div className="max-w-2xl mx-auto space-y-4">
           <div>
@@ -332,51 +379,57 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
             </TabsList>
 
             <TabsContent value="preview" className="space-y-4">
-              <Card className="p-4 space-y-4">
+              <Card className="card-modern p-4 space-y-4 border-0">
                 <div>
-                  <Label className="mb-2 block">Filter</Label>
+                  <Label className="mb-3 block font-semibold flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-primary" />
+                    Color Mode
+                  </Label>
                   <div className="grid grid-cols-3 gap-2">
                     <Button
                       variant={filter === 'color' ? 'default' : 'outline'}
                       onClick={() => setFilter('color')}
-                      className="w-full"
+                      className={`w-full ${filter === 'color' ? 'bg-gradient-to-r from-primary to-primary/90 shadow-md' : ''}`}
                     >
                       Color
                     </Button>
                     <Button
                       variant={filter === 'grayscale' ? 'default' : 'outline'}
                       onClick={() => setFilter('grayscale')}
-                      className="w-full"
+                      className={`w-full ${filter === 'grayscale' ? 'bg-gradient-to-r from-primary to-primary/90 shadow-md' : ''}`}
                     >
-                      Grayscale
+                      Gray
                     </Button>
                     <Button
                       variant={filter === 'bw' ? 'default' : 'outline'}
                       onClick={() => setFilter('bw')}
-                      className="w-full"
+                      className={`w-full ${filter === 'bw' ? 'bg-gradient-to-r from-primary to-primary/90 shadow-md' : ''}`}
                     >
                       B&W
                     </Button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setRotation((rotation - 90 + 360) % 360)}
-                    className="w-full"
-                  >
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Rotate Left
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setRotation((rotation + 90) % 360)}
-                    className="w-full"
-                  >
-                    <Rotate90 className="h-4 w-4 mr-2" />
-                    Rotate Right
-                  </Button>
+                <div>
+                  <Label className="mb-3 block font-semibold">Rotation</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setRotation((rotation - 90 + 360) % 360)}
+                      className="w-full hover:bg-secondary/80 hover:border-primary/50"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Left
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setRotation((rotation + 90) % 360)}
+                      className="w-full hover:bg-secondary/80 hover:border-primary/50"
+                    >
+                      <Rotate90 className="h-4 w-4 mr-2" />
+                      Right
+                    </Button>
+                  </div>
                 </div>
 
                 <div>
@@ -407,14 +460,17 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
                   />
                 </div>
 
-                <Button
-                  variant="outline"
-                  onClick={() => setShowSignaturePad(true)}
-                  className="w-full"
-                >
-                  <FileSignature className="h-4 w-4 mr-2" />
-                  Add Signature
-                </Button>
+                <div>
+                  <Label className="mb-3 block font-semibold">Signature</Label>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSignaturePad(true)}
+                    className="w-full hover:bg-secondary/80 hover:border-primary/50"
+                  >
+                    <FileSignature className="h-4 w-4 mr-2" />
+                    Add Signature
+                  </Button>
+                </div>
 
                 {signatureDataUrl && (
                   <div className="space-y-2">
@@ -509,26 +565,41 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card border-t border-border">
-        <div className="flex gap-2 max-w-2xl mx-auto">
-          <Button
-            variant="outline"
-            size="lg"
-            className="flex-1"
-            onClick={onCancel}
-            disabled={isProcessing}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="lg"
-            className="flex-1 bg-primary hover:bg-primary/90"
-            onClick={handleSave}
-            disabled={isProcessing || !documentName.trim()}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {isProcessing ? 'Saving...' : 'Save PDF'}
-          </Button>
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] glass border-t border-border/50">
+        <div className="max-w-2xl mx-auto space-y-2">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 hover:bg-secondary/80 hover:border-primary/50"
+              onClick={handleSaveJPG}
+              disabled={isProcessing || !documentName.trim()}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export JPG
+            </Button>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
+              onClick={onCancel}
+              disabled={isProcessing}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Cancel
+            </Button>
+            <Button
+              size="lg"
+              className="flex-[2] bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all font-semibold"
+              onClick={handleSave}
+              disabled={isProcessing || !documentName.trim()}
+            >
+              <Save className="mr-2 h-5 w-5" />
+              {isProcessing ? 'Saving...' : 'Save as PDF'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

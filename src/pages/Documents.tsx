@@ -141,14 +141,14 @@ export const Documents = () => {
 
   return (
     <div className="flex-1 flex flex-col pb-20">
-      <div className="p-4 border-b border-border bg-card">
+      <div className="p-4 border-b border-border/50 glass sticky top-[73px] z-30">
         <div className="relative max-w-lg mx-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search documents..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 bg-secondary/50 border-border/50 focus-visible:bg-background"
           />
         </div>
       </div>
@@ -169,12 +169,12 @@ export const Documents = () => {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 max-w-lg mx-auto">
+          <div className="grid gap-3 max-w-lg mx-auto">
             {filteredDocuments.map((doc) => (
-              <Card key={doc.id} className="p-4">
+              <Card key={doc.id} className="card-modern p-4 border-0 hover:shadow-xl transition-all">
                 <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
-                    <FileText className="h-8 w-8 text-muted-foreground" />
+                  <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl flex items-center justify-center">
+                    <FileText className="h-7 w-7 text-primary" />
                   </div>
                   
                   <div className="flex-1 min-w-0">

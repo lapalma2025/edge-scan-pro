@@ -132,6 +132,13 @@ export const CornerEditor = ({
 
   return (
     <div ref={containerRef} className="fixed inset-0 bg-background z-50 flex flex-col">
+      <div className="glass border-b border-border/50 p-4">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-lg font-semibold mb-1">Adjust Corners</h2>
+          <p className="text-sm text-muted-foreground">Drag the corners to fit your document</p>
+        </div>
+      </div>
+
       <div className="flex-1 flex items-center justify-center p-4">
         <canvas
           ref={canvasRef}
@@ -152,12 +159,12 @@ export const CornerEditor = ({
         />
       </div>
       
-      <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card border-t border-border">
-        <div className="flex gap-2 max-w-lg mx-auto">
+      <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] glass border-t border-border/50">
+        <div className="flex gap-3 max-w-lg mx-auto">
           <Button
             variant="outline"
             size="lg"
-            className="flex-1"
+            className="flex-1 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
             onClick={onCancel}
           >
             <X className="mr-2 h-4 w-4" />
@@ -165,10 +172,10 @@ export const CornerEditor = ({
           </Button>
           <Button
             size="lg"
-            className="flex-1 bg-primary hover:bg-primary/90"
+            className="flex-[2] bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-xl transition-all font-semibold"
             onClick={() => onConfirm(corners)}
           >
-            <Check className="mr-2 h-4 w-4" />
+            <Check className="mr-2 h-5 w-5" />
             Confirm
           </Button>
         </div>
