@@ -6,8 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Save, RotateCw, Image as ImageIcon, Type, FileSignature, RotateCcw, RotateCw as Rotate90, Sun, Contrast } from 'lucide-react';
 import { SignaturePad } from '@/components/SignaturePad';
-import { applyFilter, Point, applyPerspectiveTransform } from '@/lib/opencv-utils';
-import { createPDF, compressImage } from '@/lib/pdf-utils';
+import { applyFilter, Point, applyPerspectiveTransform, loadOpenCV } from '@/lib/opencv-utils';
+import { createPDF, createPDFBase64, compressImage } from '@/lib/pdf-utils';
 import { performOCR, initOCR } from '@/lib/ocr-utils';
 import { db } from '@/lib/db';
 import { saveFile, vibrate } from '@/lib/capacitor-utils';
@@ -53,12 +53,16 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
   const processImage = async () => {
     setIsProcessing(true);
     try {
+      // Ensure OpenCV is ready for transforms/filters
+      try { await loadOpenCV(); } catch (e) { console.warn('OpenCV not available, using canvas fallbacks'); }
+
       const img = new Image();
       img.onload = async () => {
         // Apply perspective transform if corners detected
         let transformed = imageDataUrl;
         if (corners.length === 4) {
-          transformed = applyPerspectiveTransform(img, corners, 2000, 2800);
+          const t = applyPerspectiveTransform(img, corners, 2000, 2800);
+          transformed = t && t.length > 0 ? t : imageDataUrl;
         }
 
         // Apply filter
@@ -245,8 +249,8 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
       // Compress image
       const compressed = await compressImage(finalImage, 0.85, 2000, 2800);
 
-      // Create PDF
-      const pdfBytes = await createPDF([
+      // Create PDF (base64 to avoid large array conversions)
+      const base64 = await createPDFBase64([
         {
           imageDataUrl: compressed,
           width: 595,
@@ -259,7 +263,6 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
 
       // Save to filesystem
       const fileName = `${documentName}.pdf`;
-      const base64 = btoa(String.fromCharCode(...pdfBytes));
       const filePath = await saveFile(base64, fileName, Directory.Documents);
 
       // Save to database
@@ -268,7 +271,7 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
         createdAt: new Date(),
         updatedAt: new Date(),
         pages: 1,
-        size: pdfBytes.length,
+        size: Math.ceil((base64.length * 3) / 4),
         tags: [],
         favorite: false,
         ocrText: ocrText || undefined,
@@ -451,7 +454,16 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
               </Card>
 
               {processedImage ? (
-                <div className="rounded-lg overflow-hidden border border-border relative">
+                <div
+                  className={`rounded-lg overflow-hidden border border-border relative ${signatureDataUrl ? 'cursor-crosshair' : ''}`}
+                  onClick={(e) => {
+                    if (!signatureDataUrl) return;
+                    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 100;
+                    const y = ((e.clientY - rect.top) / rect.height) * 100;
+                    setSignaturePosition({ x, y });
+                  }}
+                >
                   <canvas
                     ref={canvasRef}
                     className="w-full h-auto hidden"

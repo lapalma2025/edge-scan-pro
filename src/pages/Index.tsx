@@ -39,7 +39,7 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-background via-background/95 to-background/90">
       <header className="bg-card border-b border-border p-4">
         <div className="max-w-lg mx-auto">
           <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">

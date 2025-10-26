@@ -4,7 +4,6 @@ import { Camera, Square } from 'lucide-react';
 import { captureImage, vibrate } from '@/lib/capacitor-utils';
 import { detectDocumentEdges, loadOpenCV, Point } from '@/lib/opencv-utils';
 import { CornerEditor } from '@/components/CornerEditor';
-import { drawDetectionOverlay } from '@/components/EdgeDetectionOverlay';
 import { useToast } from '@/hooks/use-toast';
 import { ImpactStyle } from '@capacitor/haptics';
 
@@ -75,11 +74,19 @@ export const Scan = ({ onImageCaptured }: ScanProps) => {
         };
         img.src = imageDataUrl;
       } else {
-        toast({
-          title: 'Image Captured',
-          description: 'Processing without edge detection'
-        });
-        onImageCaptured(imageDataUrl, []);
+        // Open manual corner editor with full-frame corners when OpenCV isn't ready
+        const img = new Image();
+        img.onload = () => {
+          const corners: Point[] = [
+            { x: 0, y: 0 },
+            { x: img.width, y: 0 },
+            { x: img.width, y: img.height },
+            { x: 0, y: img.height }
+          ];
+          setDetectedCorners(corners);
+          setShowCornerEditor(true);
+        };
+        img.src = imageDataUrl;
       }
     } catch (error) {
       console.error('Capture error:', error);

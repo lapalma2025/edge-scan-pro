@@ -213,37 +213,71 @@ export const applyFilter = (
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      if (!cv) {
-        resolve(imageDataUrl);
-        return;
-      }
-
-      let src = cv.imread(img);
-      let dst = new cv.Mat();
-
-      try {
-        switch (filter) {
-          case 'grayscale':
-            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
-            cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
-            break;
-          case 'bw':
-            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
-            cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-            cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
-            break;
-          default:
-            dst = src.clone();
+      // If OpenCV is available, use it
+      if (cv) {
+        let src = cv.imread(img);
+        let dst = new cv.Mat();
+        try {
+          switch (filter) {
+            case 'grayscale':
+              cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+              cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
+              break;
+            case 'bw':
+              cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+              cv.adaptiveThreshold(
+                dst,
+                dst,
+                255,
+                cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv.THRESH_BINARY,
+                11,
+                2
+              );
+              cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
+              break;
+            default:
+              dst = src.clone();
+          }
+          const canvas = document.createElement('canvas');
+          cv.imshow(canvas, dst);
+          const result = canvas.toDataURL('image/jpeg', 0.95);
+          resolve(result);
+          return;
+        } finally {
+          src.delete();
+          dst.delete();
         }
-
-        const canvas = document.createElement('canvas');
-        cv.imshow(canvas, dst);
-        const result = canvas.toDataURL('image/jpeg', 0.95);
-        resolve(result);
-      } finally {
-        src.delete();
-        dst.delete();
       }
+
+      // Fallback to Canvas 2D processing when OpenCV is not loaded
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+
+      if (filter === 'grayscale' || filter === 'bw') {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          // Luma calculation for grayscale
+          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+          if (filter === 'bw') {
+            const threshold = 128;
+            const val = gray > threshold ? 255 : 0;
+            data[i] = data[i + 1] = data[i + 2] = val;
+          } else {
+            data[i] = data[i + 1] = data[i + 2] = gray;
+          }
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
+
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
     };
     img.src = imageDataUrl;
   });

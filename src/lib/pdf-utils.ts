@@ -40,6 +40,40 @@ export const createPDF = async (
   return pdfBytes;
 };
 
+export const createPDFBase64 = async (
+  pages: PDFPage[],
+  metadata?: {
+    title?: string;
+    author?: string;
+    keywords?: string[];
+  }
+): Promise<string> => {
+  const pdfDoc = await PDFDocument.create();
+
+  // Set metadata
+  if (metadata) {
+    if (metadata.title) pdfDoc.setTitle(metadata.title);
+    if (metadata.author) pdfDoc.setAuthor(metadata.author);
+    if (metadata.keywords) pdfDoc.setKeywords(metadata.keywords);
+  }
+
+  for (const pageData of pages) {
+    const imageBytes = await fetch(pageData.imageDataUrl).then(res => res.arrayBuffer());
+    const image = await pdfDoc.embedJpg(imageBytes);
+
+    const page = pdfDoc.addPage([pageData.width, pageData.height]);
+    page.drawImage(image, {
+      x: 0,
+      y: 0,
+      width: pageData.width,
+      height: pageData.height
+    });
+  }
+
+  const base64 = await pdfDoc.saveAsBase64({ dataUri: false });
+  return base64;
+};
+
 export const compressImage = (
   dataUrl: string,
   quality: number = 0.8,
