@@ -497,7 +497,7 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border">
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card border-t border-border">
         <div className="flex gap-2 max-w-2xl mx-auto">
           <Button
             variant="outline"
@@ -511,29 +511,6 @@ export const Review = ({ imageDataUrl, corners, onComplete, onCancel }: ReviewPr
           <Button
             size="lg"
             className="flex-1 bg-primary hover:bg-primary/90"
-            onClick={handleSave}
-            disabled={isProcessing || !documentName.trim()}
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {isProcessing ? 'Saving...' : 'Save PDF'}
-          </Button>
-        </div>
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border">
-        <div className="flex gap-2 max-w-2xl mx-auto">
-          <Button
-            variant="outline"
-            size="lg"
-            className="flex-1"
-            onClick={onCancel}
-            disabled={isProcessing}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="lg"
-            className="flex-1"
             onClick={handleSave}
             disabled={isProcessing || !documentName.trim()}
           >

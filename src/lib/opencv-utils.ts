@@ -12,14 +12,28 @@ export interface DetectedDocument {
 }
 
 let cv: any = null;
+let loadingPromise: Promise<void> | null = null;
 
 export const loadOpenCV = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (cv) {
-      resolve();
-      return;
-    }
+  // If already loaded, return immediately
+  if (cv && (window as any).cv) {
+    return Promise.resolve();
+  }
 
+  // If currently loading, return the existing promise
+  if (loadingPromise) {
+    return loadingPromise;
+  }
+
+  // Check if script already exists
+  const existingScript = document.querySelector('script[src*="opencv.js"]');
+  if (existingScript && (window as any).cv) {
+    cv = (window as any).cv;
+    return Promise.resolve();
+  }
+
+  // Start loading
+  loadingPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = 'https://docs.opencv.org/4.8.0/opencv.js';
     script.async = true;
@@ -31,16 +45,27 @@ export const loadOpenCV = (): Promise<void> => {
         cv = window.cv;
         cv.onRuntimeInitialized = () => {
           console.log('OpenCV.js loaded successfully');
+          loadingPromise = null;
           resolve();
         };
       } else {
+        loadingPromise = null;
         reject(new Error('OpenCV.js failed to load'));
       }
     };
     
-    script.onerror = () => reject(new Error('Failed to load OpenCV.js script'));
-    document.head.appendChild(script);
+    script.onerror = () => {
+      loadingPromise = null;
+      reject(new Error('Failed to load OpenCV.js script'));
+    };
+    
+    // Only append if script doesn't exist
+    if (!existingScript) {
+      document.head.appendChild(script);
+    }
   });
+
+  return loadingPromise;
 };
 
 export const detectDocumentEdges = (

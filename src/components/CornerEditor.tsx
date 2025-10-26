@@ -152,7 +152,7 @@ export const CornerEditor = ({
         />
       </div>
       
-      <div className="p-4 bg-card border-t border-border">
+      <div className="p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card border-t border-border">
         <div className="flex gap-2 max-w-lg mx-auto">
           <Button
             variant="outline"

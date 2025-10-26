@@ -109,7 +109,7 @@ export const Scan = ({ onImageCaptured }: ScanProps) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-4 pb-20">
+    <div className="flex-1 flex flex-col items-center justify-center p-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       {showCornerEditor && capturedImage && detectedCorners ? (
         <CornerEditor
           imageDataUrl={capturedImage}
